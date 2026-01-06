@@ -169,13 +169,6 @@ def main():
             value=20,
             key="new_habit_goal",
         )
-        new_habit_type = st.radio(
-            "Habit Type",
-            ["Good", "Bad"],
-            help="Good: Habits you want to build (Green). Bad: Habits you want to avoid (Red).",
-            horizontal=True,
-            key="new_habit_type",
-        )
 
         if st.button("Add Habit"):
             if new_habit_name:
@@ -185,9 +178,7 @@ def main():
                         next_id = int(habits_df["ID"].max()) + 1
                     except:
                         next_id = 1
-                handler.update_habit(
-                    next_id, new_habit_name, new_habit_goal, new_habit_type
-                )
+                handler.update_habit(next_id, new_habit_name, new_habit_goal)
                 st.success(f"Added '{new_habit_name}'!")
                 st.rerun()
             else:
@@ -195,19 +186,15 @@ def main():
 
         if habits_df is not None and not habits_df.empty:
             st.write("Current Habits:")
-            # Ensure "Type" column exists for display
-            if "Type" not in habits_df.columns:
-                habits_df["Type"] = "Good"
+            # Remove legacy "Type" column for clean UI
+            display_df = habits_df.copy()
+            if "Type" in display_df.columns:
+                display_df = display_df.drop(columns=["Type"])
 
             edited_habits = st.data_editor(
-                habits_df,
+                display_df,
                 key="habit_editor",
                 hide_index=True,
-                column_config={
-                    "Type": st.column_config.SelectboxColumn(
-                        "Type", options=["Good", "Bad"], required=True
-                    )
-                },
             )
             if st.button("Save Changes"):
                 for _, row in edited_habits.iterrows():
@@ -215,7 +202,6 @@ def main():
                         row["ID"],
                         row["Habit Name"],
                         row["Monthly Goal"],
-                        row.get("Type", "Good"),
                     )
                 st.success("Updated habits!")
                 st.rerun()
@@ -273,25 +259,28 @@ def main():
                 habit_completions = {}
                 for _, row in habits_df.iterrows():
                     h_id = f"H{int(row['ID'])}"
-                    current_val = False
+                    current_val = "Pending"
                     if not day_log.empty and h_id in day_log.columns:
                         try:
                             val = day_log[h_id].values[0]
-                            # Handle both boolean and boolean-like values from JSON
-                            current_val = bool(val) if pd.notnull(val) else False
+                            if val == True or val == "Yes":
+                                current_val = "Yes"
+                            elif val == False or val == "No":
+                                current_val = "No"
                         except:
-                            current_val = False
-                    label_color = (
-                        "#2ECC71" if row.get("Type", "Good") == "Good" else "#E74C3C"
-                    )
+                            current_val = "Pending"
+
                     st.markdown(
-                        f"**<span style='color:{label_color};'>{'✅' if row.get('Type', 'Good') == 'Good' else '🚫'} {row['Habit Name']}</span>**",
+                        f"**<span style='color:#2ECC71;'>🚀 {row['Habit Name']}</span>**",
                         unsafe_allow_html=True,
                     )
-                    habit_completions[h_id] = st.checkbox(
-                        "Completed",
-                        value=current_val,
-                        key=f"check_{h_id}",
+                    habit_completions[h_id] = st.radio(
+                        "Status",
+                        ["Pending", "Yes", "No"],
+                        index=["Pending", "Yes", "No"].index(current_val),
+                        key=f"radio_{h_id}",
+                        horizontal=True,
+                        label_visibility="collapsed",
                     )
 
             with col2:
