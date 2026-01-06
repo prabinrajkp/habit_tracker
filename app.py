@@ -203,6 +203,23 @@ def main():
                 st.success("Updated habits!")
                 st.rerun()
 
+        if habits_df is not None and not habits_df.empty:
+            st.divider()
+            st.subheader("🗑️ Delete a Habit")
+            habit_to_delete = st.selectbox(
+                "Select habit to remove",
+                options=habits_df["Habit Name"].tolist(),
+                key="delete_habit_select",
+            )
+
+            if st.button("Delete Selected Habit", type="secondary"):
+                h_id = habits_df[habits_df["Habit Name"] == habit_to_delete][
+                    "ID"
+                ].values[0]
+                handler.delete_habit(h_id)
+                st.warning(f"Deleted habit: {habit_to_delete}")
+                st.rerun()
+
     with tab1:
         st.subheader(f"Tracking for {month_name} {year}")
 

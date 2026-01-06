@@ -127,6 +127,20 @@ class GithubHandler:
         self.data["habits"] = habits
         self._save_data()
 
+    def delete_habit(self, habit_id):
+        # 1. Remove from habits list
+        self.data["habits"] = [
+            h for h in self.data["habits"] if str(h.get("ID")) != str(habit_id)
+        ]
+
+        # 2. Clean up logs
+        h_id = f"H{habit_id}"
+        for log in self.data["logs"]:
+            if h_id in log:
+                del log[h_id]
+
+        self._save_data()
+
     def get_logs(self, start_date, end_date):
         df = pd.DataFrame(self.data["logs"])
         if df.empty:
