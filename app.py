@@ -10,6 +10,8 @@ from analytics import (
     create_donut_chart,
     create_line_chart,
     create_bar_chart,
+    create_tug_of_war_chart,
+    create_habit_performance_chart,
 )
 
 # VERSION 1.4 - GitHub Gist Backend
@@ -167,6 +169,13 @@ def main():
             value=20,
             key="new_habit_goal",
         )
+        new_habit_type = st.radio(
+            "Habit Type",
+            ["Good", "Bad"],
+            help="Good: Habits you want to build (Green). Bad: Habits you want to avoid (Red).",
+            horizontal=True,
+            key="new_habit_type",
+        )
 
         if st.button("Add Habit"):
             if new_habit_name:
@@ -176,7 +185,9 @@ def main():
                         next_id = int(habits_df["ID"].max()) + 1
                     except:
                         next_id = 1
-                handler.update_habit(next_id, new_habit_name, new_habit_goal)
+                handler.update_habit(
+                    next_id, new_habit_name, new_habit_goal, new_habit_type
+                )
                 st.success(f"Added '{new_habit_name}'!")
                 st.rerun()
             else:
@@ -184,13 +195,27 @@ def main():
 
         if habits_df is not None and not habits_df.empty:
             st.write("Current Habits:")
+            # Ensure "Type" column exists for display
+            if "Type" not in habits_df.columns:
+                habits_df["Type"] = "Good"
+
             edited_habits = st.data_editor(
-                habits_df, key="habit_editor", hide_index=True
+                habits_df,
+                key="habit_editor",
+                hide_index=True,
+                column_config={
+                    "Type": st.column_config.SelectboxColumn(
+                        "Type", options=["Good", "Bad"], required=True
+                    )
+                },
             )
             if st.button("Save Changes"):
                 for _, row in edited_habits.iterrows():
                     handler.update_habit(
-                        row["ID"], row["Habit Name"], row["Monthly Goal"]
+                        row["ID"],
+                        row["Habit Name"],
+                        row["Monthly Goal"],
+                        row.get("Type", "Good"),
                     )
                 st.success("Updated habits!")
                 st.rerun()
@@ -256,8 +281,17 @@ def main():
                             current_val = bool(val) if pd.notnull(val) else False
                         except:
                             current_val = False
+                    label_color = (
+                        "#2ECC71" if row.get("Type", "Good") == "Good" else "#E74C3C"
+                    )
+                    st.markdown(
+                        f"**<span style='color:{label_color};'>{'✅' if row.get('Type', 'Good') == 'Good' else '🚫'} {row['Habit Name']}</span>**",
+                        unsafe_allow_html=True,
+                    )
                     habit_completions[h_id] = st.checkbox(
-                        row["Habit Name"], value=current_val, key=f"check_{h_id}"
+                        "Completed",
+                        value=current_val,
+                        key=f"check_{h_id}",
                     )
 
             with col2:
@@ -324,6 +358,15 @@ def main():
             st.metric("Total Habits", len(habits_df) if habits_df is not None else 0)
             st.metric("Days Logged", len(logs_df) if logs_df is not None else 0)
             st.markdown("</div>", unsafe_allow_html=True)
+
+        st.plotly_chart(
+            create_tug_of_war_chart(stats["good_vs_bad"]), use_container_width=True
+        )
+
+        st.plotly_chart(
+            create_habit_performance_chart(habits_df, logs_df),
+            use_container_width=True,
+        )
 
         with c3:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)

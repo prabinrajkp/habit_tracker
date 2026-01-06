@@ -16,6 +16,7 @@ def calculate_completion_stats(logs_df, habits_df):
             "daily_consistency": empty_consistency,
             "top_habits": empty_top,
             "weekly_comparison": empty_weekly,
+            "good_vs_bad": {"good": 0, "bad": 0},
         }
 
     # If habits exist but logs don't, we still want to show 0% progress
@@ -25,6 +26,7 @@ def calculate_completion_stats(logs_df, habits_df):
             "daily_consistency": empty_consistency,
             "top_habits": empty_top,
             "weekly_comparison": empty_weekly,
+            "good_vs_bad": {"good": 0, "bad": 0},
         }
 
     try:
@@ -35,6 +37,7 @@ def calculate_completion_stats(logs_df, habits_df):
                 "daily_consistency": empty_consistency,
                 "top_habits": empty_top,
                 "weekly_comparison": empty_weekly,
+                "good_vs_bad": {"good": 0, "bad": 0},
             }
 
         # Overall completion rate
@@ -73,11 +76,30 @@ def calculate_completion_stats(logs_df, habits_df):
         else:
             weekly_comp = empty_weekly
 
+        # Good vs Bad Tug of War
+        if "Type" not in habits_df.columns:
+            habits_df["Type"] = "Good"
+
+        good_habit_ids = [
+            f"H{row['ID']}" for _, row in habits_df.iterrows() if row["Type"] == "Good"
+        ]
+        bad_habit_ids = [
+            f"H{row['ID']}" for _, row in habits_df.iterrows() if row["Type"] == "Bad"
+        ]
+
+        good_total = (
+            logs_df[[c for c in good_habit_ids if c in logs_df.columns]].sum().sum()
+        )
+        bad_total = (
+            logs_df[[c for c in bad_habit_ids if c in logs_df.columns]].sum().sum()
+        )
+
         return {
             "overall_rate": overall_rate,
             "daily_consistency": daily_consistency,
             "top_habits": top_habits,
             "weekly_comparison": weekly_comp,
+            "good_vs_bad": {"good": good_total, "bad": bad_total},
         }
     except Exception as e:
         st.error(f"Error in analytics: {e}")
@@ -86,6 +108,7 @@ def calculate_completion_stats(logs_df, habits_df):
             "daily_consistency": empty_consistency,
             "top_habits": empty_top,
             "weekly_comparison": empty_weekly,
+            "good_vs_bad": {"good": 0, "bad": 0},
         }
 
 
@@ -141,4 +164,103 @@ def create_bar_chart(df):
     except Exception as e:
         fig = go.Figure()
         fig.update_layout(title=f"Error creating bar chart: {e}")
+        return fig
+
+
+def create_tug_of_war_chart(counts):
+    try:
+        good = counts.get("good", 0)
+        bad = counts.get("bad", 0)
+        total = good + bad
+
+        if total == 0:
+            fig = go.Figure()
+            fig.update_layout(title="Tug of War: No Data")
+            return fig
+
+        good_pct = (good / total) * 100
+        bad_pct = (bad / total) * 100
+
+        fig = go.Figure()
+
+        # Add "Good" side (Green)
+        fig.add_trace(
+            go.Bar(
+                y=["Balance"],
+                x=[good],
+                name="Good Habits",
+                orientation="h",
+                marker_color="#2ECC71",
+            )
+        )
+
+        # Add "Bad" side (Red)
+        fig.add_trace(
+            go.Bar(
+                y=["Balance"],
+                x=[bad],
+                name="Bad Habits",
+                orientation="h",
+                marker_color="#E74C3C",
+            )
+        )
+
+        fig.update_layout(
+            barmode="stack",
+            title="⚔️ Good vs Bad: Tug of War",
+            xaxis_title="Completions Count",
+            yaxis_visible=False,
+            height=200,
+            showlegend=True,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=50, b=30, l=10, r=10),
+        )
+
+        return fig
+    except Exception as e:
+        fig = go.Figure()
+        fig.update_layout(title=f"Error creating Tug of War: {e}")
+        return fig
+
+
+def create_habit_performance_chart(habits_df, logs_df):
+    try:
+        if habits_df is None or habits_df.empty or logs_df is None or logs_df.empty:
+            fig = go.Figure()
+            fig.update_layout(title="Habit Performance: No Data")
+            return fig
+
+        habit_cols = [c for c in logs_df.columns if c.startswith("H")]
+        if not habit_cols:
+            return go.Figure()
+
+        completions = logs_df[habit_cols].sum().reset_index()
+        completions.columns = ["H_ID", "Completed"]
+        completions["ID"] = (
+            completions["H_ID"].str.replace("H", "", regex=False).astype(int)
+        )
+
+        df = pd.merge(completions, habits_df, on="ID")
+        df["Color"] = df["Type"].map({"Good": "#2ECC71", "Bad": "#E74C3C"})
+
+        fig = px.bar(
+            df,
+            x="Habit Name",
+            y="Completed",
+            color="Type",
+            color_discrete_map={"Good": "#2ECC71", "Bad": "#E74C3C"},
+            title="🎯 Habit Performance Breakdown",
+        )
+
+        fig.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            xaxis_title="",
+            yaxis_title="Total Days Completed",
+        )
+        return fig
+    except Exception as e:
+        fig = go.Figure()
+        fig.update_layout(title=f"Error creating performance chart: {e}")
         return fig

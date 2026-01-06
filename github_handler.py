@@ -35,7 +35,7 @@ class GithubHandler:
         metrics_path = os.path.join(self.local_dir, "metrics.csv")
 
         if not os.path.exists(habits_path):
-            pd.DataFrame(columns=["ID", "Habit Name", "Monthly Goal"]).to_csv(
+            pd.DataFrame(columns=["ID", "Habit Name", "Monthly Goal", "Type"]).to_csv(
                 habits_path, index=False
             )
         if not os.path.exists(logs_path):
@@ -112,17 +112,25 @@ class GithubHandler:
     def get_habits(self):
         return pd.DataFrame(self.data["habits"])
 
-    def update_habit(self, habit_id, name, goal):
+    def update_habit(self, habit_id, name, goal, habit_type="Good"):
         habits = self.data["habits"]
         updated = False
         for h in habits:
             if str(h.get("ID")) == str(habit_id):
                 h["Habit Name"] = name
                 h["Monthly Goal"] = goal
+                h["Type"] = habit_type
                 updated = True
                 break
         if not updated:
-            habits.append({"ID": habit_id, "Habit Name": name, "Monthly Goal": goal})
+            habits.append(
+                {
+                    "ID": habit_id,
+                    "Habit Name": name,
+                    "Monthly Goal": goal,
+                    "Type": habit_type,
+                }
+            )
 
         self.data["habits"] = habits
         self._save_data()
