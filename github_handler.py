@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import datetime
 import os
+import uuid
 
 
 class GithubHandler:
@@ -74,6 +75,21 @@ class GithubHandler:
                 if os.path.exists(habits_path):
                     with open(habits_path, "r") as f:
                         self.habits = json.load(f)
+
+            # 3. If still empty, populate with default habits from JSON
+            if not self.habits:
+                default_file = "default_habits.json"
+                if os.path.exists(default_file):
+                    with open(default_file, "r") as f:
+                        defaults = json.load(f)
+                        # Add IDs to defaults
+                        for h in defaults:
+                            if "ID" not in h:
+                                h["ID"] = str(uuid.uuid4())
+                        self.habits = defaults
+                else:
+                    self.habits = []
+                self._save_habits()
 
     def _fetch_all_gist_files(self):
         """Returns a dict of filename -> content for all files in the gist."""
