@@ -56,106 +56,126 @@ if "local_mode" not in st.session_state:
     st.session_state.local_mode = False
 
 
-def main():
-    st.title("🚀 Ultimate Habit Tracker")
+def login_page():
+    st.markdown(
+        """
+        <div style='text-align: center; padding: 20px;'>
+            <h1 style='font-size: 3rem;'>🚀 Habit Tracker</h1>
+            <p style='color: #666; font-size: 1.2rem;'>Your journey to a better you starts here.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # Removed local config file loading for session-based security
+    col1, col2, col3 = st.columns([1, 2, 1])
 
-    with st.sidebar:
-        st.subheader("⚙️ Configuration")
+    with col2:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.subheader("🔑 Connect Your Account")
 
-        st.session_state.local_mode = st.toggle(
+        local_mode = st.toggle(
             "Local Mode (Offline)",
             value=st.session_state.local_mode,
-            help="Use local CSV files instead of GitHub sync",
+            help="Use local storage instead of GitHub sync",
         )
 
-        st.markdown("---")
-        st.markdown("### ☁️ GitHub Sync")
-        git_token_input = st.text_input(
-            "GitHub Token (PAT)",
-            value=st.session_state.git_token,
-            type="password",
-            help="Your Personal Access Token with 'gist' scope",
-        )
-
-        if st.button("Connect & Initialize"):
-            if git_token_input:
-                with st.spinner("Connecting to GitHub..."):
-                    gist_id = GithubHandler.create_or_find_gist(git_token_input)
-                    if gist_id:
-                        st.session_state.git_token = git_token_input
-                        st.session_state.gist_id = gist_id
-                        st.session_state.local_mode = False
-                        st.success("Successfully connected to GitHub!")
-                        st.rerun()
-                    else:
-                        st.error(
-                            "Failed to connect. Check your token permissions (must have 'gist' scope)."
-                        )
-            else:
-                st.error("Please enter a GitHub Token.")
-
-        st.divider()
-
-        with st.expander("🔑 How to get a GitHub Token?"):
-            st.markdown(
-                """
-            1. [Click here](https://github.com/settings/tokens/new?description=HabitTracker&scopes=gist) to go to GitHub Token creation.
-            2. Or go to **Settings > Developer Settings > Personal access tokens > Tokens (classic)**.
-            3. Generate a new token with the **'gist'** scope.
-            4. Copy the token and paste it above!
-            """
+        if not local_mode:
+            st.markdown("---")
+            st.markdown("### ☁️ GitHub Sync")
+            git_token_input = st.text_input(
+                "GitHub Token (PAT)",
+                value=st.session_state.git_token,
+                type="password",
+                help="Your Personal Access Token with 'gist' scope",
             )
 
-        st.divider()
-        st.subheader("📅 Calendar Settings")
+            if st.button(
+                "Connect & Start Tracking", type="primary", use_container_width=True
+            ):
+                if git_token_input:
+                    with st.spinner("Connecting to GitHub..."):
+                        gist_id = GithubHandler.create_or_find_gist(git_token_input)
+                        if gist_id:
+                            st.session_state.git_token = git_token_input
+                            st.session_state.gist_id = gist_id
+                            st.session_state.local_mode = False
+                            st.success("Successfully connected!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to connect. Check your token permissions.")
+                else:
+                    st.error("Please enter a GitHub Token.")
+
+            with st.expander("❓ How to get a token?"):
+                st.markdown(
+                    """
+                1. [Click here](https://github.com/settings/tokens/new?description=HabitTracker&scopes=gist) to go to GitHub Token creation.
+                2. Generate a token with the **'gist'** scope.
+                3. Copy and paste it above!
+                """
+                )
+        else:
+            if st.button(
+                "Start Local Session", type="primary", use_container_width=True
+            ):
+                st.session_state.local_mode = True
+                st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def main():
+    # Authentication check
+    if not st.session_state.local_mode and not (
+        st.session_state.git_token and st.session_state.gist_id
+    ):
+        login_page()
+        st.stop()
+
+    # Header with Title and Disconnect
+    h_col1, h_col2 = st.columns([4, 1])
+    with h_col1:
+        st.title("🚀 Ultimate Habit Tracker")
+    with h_col2:
+        if st.button("Logout / Disconnect"):
+            st.session_state.git_token = ""
+            st.session_state.gist_id = ""
+            st.session_state.local_mode = False
+            st.rerun()
+
+    # Calendar Settings in Header columns
+    cal_col1, cal_col2, cal_col3 = st.columns([2, 2, 8])
+    with cal_col1:
         year = st.selectbox(
             "Year", range(2024, 2030), index=datetime.datetime.now().year - 2024
         )
+    with cal_col2:
         month_name = st.selectbox(
             "Month", calendar.month_name[1:], index=datetime.datetime.now().month - 1
         )
-        month = list(calendar.month_name).index(month_name)
+    month = list(calendar.month_name).index(month_name)
 
     # Initialize handler
     if st.session_state.local_mode:
         handler = GithubHandler(local=True)
-    elif st.session_state.git_token and st.session_state.gist_id:
+    else:
         handler = GithubHandler(
             token=st.session_state.git_token, gist_id=st.session_state.gist_id
         )
-    else:
-        st.markdown(
-            """
-        <div class="setup-box">
-            <h3>Welcome! Let's get synced.</h3>
-            <p>To use cloud sync across your devices:</p>
-            <ol>
-                <li>Get a <b>GitHub Token</b> (30 seconds in the sidebar guide).</li>
-                <li>Paste it in the sidebar and click <b>Connect</b>.</li>
-                <li>Your data will be stored securely and privately in a GitHub Gist.</li>
-            </ol>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-        st.info("💡 You can also try **Local Mode** to get started offline.")
-        st.stop()
 
     # Load data for specific month
     try:
         handler.load_month(year, month)
         habits_df = handler.get_habits()
 
-        start_date = datetime.date(year, month, 1)
-        _, last_day = calendar.monthrange(year, month)
-        end_date = datetime.date(year, month, last_day)
-
         logs_df = handler.get_logs()
         metrics_df = handler.get_metrics()
     except Exception as e:
         st.error(f"Error loading data: {e}")
+        if st.button("Return to Login"):
+            st.session_state.git_token = ""
+            st.session_state.local_mode = False
+            st.rerun()
         st.stop()
 
     tab1, tab2, tab4, tab3 = st.tabs(
