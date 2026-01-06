@@ -154,6 +154,9 @@ def main():
             "Month", calendar.month_name[1:], index=datetime.datetime.now().month - 1
         )
     month = list(calendar.month_name).index(month_name)
+    start_date = datetime.date(year, month, 1)
+    _, last_day = calendar.monthrange(year, month)
+    end_date = datetime.date(year, month, last_day)
 
     # Initialize handler
     if st.session_state.local_mode:
