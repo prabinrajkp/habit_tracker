@@ -266,3 +266,85 @@ def create_habit_performance_chart(habits_df, logs_df):
         fig = go.Figure()
         fig.update_layout(title=f"Error creating performance chart: {e}")
         return fig
+
+
+def create_overall_trends_chart(all_data):
+    """Visualizes month-over-month completion rates and mood."""
+    try:
+        logs_df = pd.DataFrame(all_data.get("logs", []))
+        metrics_df = pd.DataFrame(all_data.get("metrics", []))
+
+        if logs_df.empty:
+            return go.Figure().update_layout(title="No historical data found")
+
+        logs_df["Date"] = pd.to_datetime(logs_df["Date"])
+        logs_df["Month"] = logs_df["Date"].dt.strftime("%Y-%m")
+
+        habit_cols = [c for c in logs_df.columns if c.startswith("H")]
+        if not habit_cols:
+            return go.Figure()
+
+        # Calculate completion rate per month
+        is_yes = (logs_df[habit_cols] == "Yes") | (logs_df[habit_cols] == True)
+        logs_df["Monthly_Sum"] = is_yes.sum(axis=1)
+
+        monthly_stats = logs_df.groupby("Month")["Monthly_Sum"].sum().reset_index()
+        # Count total potential items
+        monthly_total_habits = (
+            logs_df.groupby("Month")[habit_cols].count().sum(axis=1).reset_index()
+        )
+        monthly_total_habits.columns = ["Month", "Total_Possible"]
+
+        df = pd.merge(monthly_stats, monthly_total_habits, on="Month")
+        df["Completion Rate (%)"] = (df["Monthly_Sum"] / df["Total_Possible"]) * 100
+
+        # Add Mood if available
+        if not metrics_df.empty:
+            metrics_df["Date"] = pd.to_datetime(metrics_df["Date"])
+            metrics_df["Month"] = metrics_df["Date"].dt.strftime("%Y-%m")
+            monthly_mood = (
+                metrics_df.groupby("Month")["Mood (1-10)"].mean().reset_index()
+            )
+            df = pd.merge(df, monthly_mood, on="Month", how="left")
+
+        fig = go.Figure()
+
+        # Bars for Completion Rate
+        fig.add_trace(
+            go.Bar(
+                x=df["Month"],
+                y=df["Completion Rate (%)"],
+                name="Completion Rate",
+                marker_color="#2ECC71",
+            )
+        )
+
+        # Line for Mood
+        if "Mood (1-10)" in df.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=df["Month"],
+                    y=df["Mood (1-10)"] * 10,  # Scale mood to 100
+                    name="Avg Mood (scaled x10)",
+                    mode="lines+markers",
+                    line=dict(color="#3498DB", width=4),
+                )
+            )
+
+        fig.update_layout(
+            title="📈 Long-term Habit Trends",
+            xaxis_title="Month",
+            yaxis_title="Percentage (%)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified",
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            ),
+        )
+
+        return fig
+    except Exception as e:
+        fig = go.Figure()
+        fig.update_layout(title=f"Error creating trends chart: {e}")
+        return fig

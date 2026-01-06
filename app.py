@@ -13,6 +13,7 @@ from analytics import (
     create_bar_chart,
     create_tug_of_war_chart,
     create_habit_performance_chart,
+    create_overall_trends_chart,
 )
 
 # VERSION 1.4 - GitHub Gist Backend
@@ -142,21 +143,24 @@ def main():
         st.info("💡 You can also try **Local Mode** to get started offline.")
         st.stop()
 
-    # Load data
+    # Load data for specific month
     try:
+        handler.load_month(year, month)
         habits_df = handler.get_habits()
 
         start_date = datetime.date(year, month, 1)
         _, last_day = calendar.monthrange(year, month)
         end_date = datetime.date(year, month, last_day)
 
-        logs_df = handler.get_logs(start_date, end_date)
-        metrics_df = handler.get_metrics(start_date, end_date)
+        logs_df = handler.get_logs()
+        metrics_df = handler.get_metrics()
     except Exception as e:
         st.error(f"Error loading data: {e}")
         st.stop()
 
-    tab1, tab2, tab3 = st.tabs(["📅 Daily Tracker", "📊 Dashboard", "⚙️ Habit Settings"])
+    tab1, tab2, tab4, tab3 = st.tabs(
+        ["📅 Daily Tracker", "📊 Dashboard", "📈 Overall Analysis", "⚙️ Habit Settings"]
+    )
 
     with tab3:
         st.subheader("Configure Your Habits")
@@ -385,7 +389,7 @@ def main():
         with c2:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Total Habits", len(habits_df) if habits_df is not None else 0)
-            st.metric("Days Logged", len(logs_df) if logs_df is not None else 0)
+            st.metric("Total Months Tracked", len(handler.get_all_available_months()))
             st.markdown("</div>", unsafe_allow_html=True)
 
         st.plotly_chart(
@@ -412,9 +416,40 @@ def main():
         st.plotly_chart(
             create_line_chart(stats["daily_consistency"]), use_container_width=True
         )
+
         st.plotly_chart(
             create_bar_chart(stats["weekly_comparison"]), use_container_width=True
         )
+
+    with tab4:
+        st.subheader("📈 Long-term Habit Analysis")
+        st.info("This view aggregates all your historical data from every month.")
+
+        with st.spinner("Fetching historical data..."):
+            all_history = handler.load_all_history()
+
+        if not all_history["logs"]:
+            st.warning(
+                "No historical data found yet. Keep tracking to see your progress trends!"
+            )
+        else:
+            fig_trends = create_overall_trends_chart(all_history)
+            st.plotly_chart(fig_trends, use_container_width=True)
+
+            # Additional insights
+            st.divider()
+            st.subheader("Month-by-Month Summary")
+            all_months = handler.get_all_available_months()
+            summary_data = []
+            for y, m in all_months:
+                import calendar as cal
+
+                m_name = cal.month_name[m]
+                summary_data.append(
+                    {"Month": f"{m_name} {y}", "Source": f"data_{y}_{m:02d}.json"}
+                )
+
+            st.table(pd.DataFrame(summary_data))
 
 
 if __name__ == "__main__":

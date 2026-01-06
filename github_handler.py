@@ -11,7 +11,9 @@ class GithubHandler:
         self.gist_id = gist_id
         self.local = local
         self.local_dir = "local_data"
-        self.filename = "habit_tracker_data.json"
+        self.old_filename = "habit_tracker_data.json"
+        self.habits_filename = "habits.json"
+
         self.headers = (
             {
                 "Authorization": f"token {self.token}",
@@ -21,182 +23,240 @@ class GithubHandler:
             else {}
         )
 
+        if self.local and not os.path.exists(self.local_dir):
+            os.makedirs(self.local_dir)
+
+        self.habits = []
+        self.current_month_data = {"logs": [], "metrics": []}
+        self.current_year = None
+        self.current_month = None
+
+        self._initial_load_and_migrate()
+
+    def _initial_load_and_migrate(self):
+        """Loads habits and checks if migration from old single-file format is needed."""
+        fetch_all = self._fetch_all_gist_files()
+
+        # 1. Check for legacy file and migrate if needed
+        if self.old_filename in fetch_all:
+            legacy_data = json.loads(fetch_all[self.old_filename])
+            self.habits = legacy_data.get("habits", [])
+
+            # Split logs/metrics by month
+            logs = legacy_data.get("logs", [])
+            metrics = legacy_data.get("metrics", [])
+
+            monthly_buckets = {}
+            for entry in logs + metrics:
+                d = datetime.datetime.strptime(entry["Date"], "%Y-%m-%d")
+                key = f"data_{d.year}_{d.month:02d}.json"
+                if key not in monthly_buckets:
+                    monthly_buckets[key] = {"logs": [], "metrics": []}
+
+                if "Mood (1-10)" in entry:  # Metric
+                    monthly_buckets[key]["metrics"].append(entry)
+                else:  # Log
+                    monthly_buckets[key]["logs"].append(entry)
+
+            # Save migrated files
+            self._save_habits()
+            for filename, data in monthly_buckets.items():
+                self._upload_to_gist(filename, data)
+
+            # Delete legacy file
+            self._delete_from_gist(self.old_filename)
+        else:
+            # 2. Normal load of habits
+            if self.habits_filename in fetch_all:
+                self.habits = json.loads(fetch_all[self.habits_filename])
+            elif self.local:
+                habits_path = os.path.join(self.local_dir, self.habits_filename)
+                if os.path.exists(habits_path):
+                    with open(habits_path, "r") as f:
+                        self.habits = json.load(f)
+
+    def _fetch_all_gist_files(self):
+        """Returns a dict of filename -> content for all files in the gist."""
         if self.local:
-            if not os.path.exists(self.local_dir):
-                os.makedirs(self.local_dir)
-            self._initialize_local_files()
-
-        self.data = self._load_data()
-
-    def _initialize_local_files(self):
-        # Local CSVs for backward compatibility or local-only mode
-        habits_path = os.path.join(self.local_dir, "habits.csv")
-        logs_path = os.path.join(self.local_dir, "logs.csv")
-        metrics_path = os.path.join(self.local_dir, "metrics.csv")
-
-        if not os.path.exists(habits_path):
-            pd.DataFrame(columns=["ID", "Habit Name", "Monthly Goal"]).to_csv(
-                habits_path, index=False
-            )
-        if not os.path.exists(logs_path):
-            pd.DataFrame(columns=["Date"]).to_csv(logs_path, index=False)
-        if not os.path.exists(metrics_path):
-            pd.DataFrame(
-                columns=[
-                    "Date",
-                    "Screen Time (min)",
-                    "Mood (1-10)",
-                    "Energy (1-10)",
-                    "Achievements",
-                ]
-            ).to_csv(metrics_path, index=False)
-
-    def _load_data(self):
-        if self.local:
-            # For local mode, we still use CSVs to maintain compatibility with existing local data
-            return {
-                "habits": pd.read_csv(
-                    os.path.join(self.local_dir, "habits.csv")
-                ).to_dict("records"),
-                "logs": pd.read_csv(os.path.join(self.local_dir, "logs.csv")).to_dict(
-                    "records"
-                ),
-                "metrics": pd.read_csv(
-                    os.path.join(self.local_dir, "metrics.csv")
-                ).to_dict("records"),
-            }
+            files = {}
+            if os.path.exists(self.local_dir):
+                for f in os.listdir(self.local_dir):
+                    if f.endswith(".json"):
+                        with open(os.path.join(self.local_dir, f), "r") as file:
+                            files[f] = file.read()
+            return files
 
         if not self.token or not self.gist_id:
-            return {"habits": [], "logs": [], "metrics": []}
-
+            return {}
         try:
             url = f"https://api.github.com/gists/{self.gist_id}"
             response = requests.get(url, headers=self.headers)
             if response.status_code == 200:
                 gist_data = response.json()
-                if self.filename in gist_data["files"]:
-                    content = gist_data["files"][self.filename]["content"]
-                    return json.loads(content)
-            return {"habits": [], "logs": [], "metrics": []}
-        except Exception as e:
-            print(f"Error loading data from GitHub: {e}")
-            return {"habits": [], "logs": [], "metrics": []}
+                return {
+                    name: info["content"] for name, info in gist_data["files"].items()
+                }
+        except:
+            pass
+        return {}
 
-    def _save_data(self):
+    def load_month(self, year, month):
+        """Loads logs and metrics for a specific month."""
+        self.current_year = year
+        self.current_month = month
+        filename = f"data_{year}_{month:02d}.json"
+
+        files = self._fetch_all_gist_files()
+        if filename in files:
+            self.current_month_data = json.loads(files[filename])
+        else:
+            self.current_month_data = {"logs": [], "metrics": []}
+        return self.current_month_data
+
+    def get_all_available_months(self):
+        """Scans gist files for all data_YYYY_MM.json files and returns a list of (year, month)."""
+        files = self._fetch_all_gist_files()
+        months = []
+        for f in files.keys():
+            if f.startswith("data_") and f.endswith(".json"):
+                parts = f.replace("data_", "").replace(".json", "").split("_")
+                if len(parts) == 2:
+                    months.append((int(parts[0]), int(parts[1])))
+        return sorted(months)
+
+    def load_all_history(self):
+        """Fetches every monthly data file and returns a merged dictionary of ALL logs and metrics."""
+        files = self._fetch_all_gist_files()
+        all_logs = []
+        all_metrics = []
+        for f, content in files.items():
+            if f.startswith("data_") and f.endswith(".json"):
+                month_data = json.loads(content)
+                all_logs.extend(month_data.get("logs", []))
+                all_metrics.extend(month_data.get("metrics", []))
+        return {"logs": all_logs, "metrics": all_metrics}
+
+    def _save_habits(self):
+        self._upload_to_gist(self.habits_filename, self.habits)
+
+    def _save_current_month(self):
+        if self.current_year and self.current_month:
+            filename = f"data_{self.current_year}_{self.current_month:02d}.json"
+            self._upload_to_gist(filename, self.current_month_data)
+
+    def _upload_to_gist(self, filename, data):
         if self.local:
-            pd.DataFrame(self.data["habits"]).to_csv(
-                os.path.join(self.local_dir, "habits.csv"), index=False
-            )
-            pd.DataFrame(self.data["logs"]).to_csv(
-                os.path.join(self.local_dir, "logs.csv"), index=False
-            )
-            pd.DataFrame(self.data["metrics"]).to_csv(
-                os.path.join(self.local_dir, "metrics.csv"), index=False
-            )
+            with open(os.path.join(self.local_dir, filename), "w") as f:
+                json.dump(data, f, indent=2)
             return True
 
         if not self.token or not self.gist_id:
             return False
-
         try:
             url = f"https://api.github.com/gists/{self.gist_id}"
-            payload = {
-                "files": {self.filename: {"content": json.dumps(self.data, indent=2)}}
-            }
+            payload = {"files": {filename: {"content": json.dumps(data, indent=2)}}}
             response = requests.patch(url, headers=self.headers, json=payload)
             return response.status_code == 200
-        except Exception as e:
-            print(f"Error saving data to GitHub: {e}")
+        except:
             return False
 
+    def _delete_from_gist(self, filename):
+        if self.local:
+            path = os.path.join(self.local_dir, filename)
+            if os.path.exists(path):
+                os.remove(path)
+            return True
+        try:
+            url = f"https://api.github.com/gists/{self.gist_id}"
+            payload = {"files": {filename: None}}
+            requests.patch(url, headers=self.headers, json=payload)
+        except:
+            pass
+
     def get_habits(self):
-        return pd.DataFrame(self.data["habits"])
+        return pd.DataFrame(self.habits)
 
     def update_habit(self, habit_id, name, goal):
-        habits = self.data["habits"]
         updated = False
-        for h in habits:
+        for h in self.habits:
             if str(h.get("ID")) == str(habit_id):
                 h["Habit Name"] = name
                 h["Monthly Goal"] = goal
-                # Clean up legacy Type attribute if exists
-                if "Type" in h:
-                    del h["Type"]
                 updated = True
                 break
         if not updated:
-            habits.append(
-                {
-                    "ID": habit_id,
-                    "Habit Name": name,
-                    "Monthly Goal": goal,
-                }
+            self.habits.append(
+                {"ID": habit_id, "Habit Name": name, "Monthly Goal": goal}
             )
-
-        self.data["habits"] = habits
-        self._save_data()
+        self._save_habits()
 
     def delete_habit(self, habit_id):
-        # 1. Remove from habits list
-        self.data["habits"] = [
-            h for h in self.data["habits"] if str(h.get("ID")) != str(habit_id)
-        ]
-
-        # 2. Clean up logs
-        h_id = f"H{habit_id}"
-        for log in self.data["logs"]:
-            if h_id in log:
-                del log[h_id]
-
-        self._save_data()
+        self.habits = [h for h in self.habits if str(h.get("ID")) != str(habit_id)]
+        self._save_habits()
+        # Note: We don't clean up logs across all monthly files for performance,
+        # analytics should handle missing IDs.
 
     def reset_data(self):
-        self.data = {"habits": [], "logs": [], "metrics": []}
-        return self._save_data()
+        files = self._fetch_all_gist_files()
+        for f in files.keys():
+            if f.endswith(".json"):
+                self._delete_from_gist(f)
+        self.habits = []
+        self.current_month_data = {"logs": [], "metrics": []}
+        return True
 
-    def get_logs(self, start_date, end_date):
-        df = pd.DataFrame(self.data["logs"])
+    def get_logs(self, start_date=None, end_date=None):
+        # Optimized to use current loaded month unless dates suggest otherwise
+        df = pd.DataFrame(self.current_month_data["logs"])
         if df.empty:
             return df
         df["Date"] = pd.to_datetime(df["Date"])
-        mask = (df["Date"] >= pd.to_datetime(start_date)) & (
-            df["Date"] <= pd.to_datetime(end_date)
-        )
-        return df.loc[mask]
+        if start_date and end_date:
+            mask = (df["Date"] >= pd.to_datetime(start_date)) & (
+                df["Date"] <= pd.to_datetime(end_date)
+            )
+            return df.loc[mask]
+        return df
 
     def save_log(self, date, habit_completions):
         date_str = date.strftime("%Y-%m-%d")
-        logs = self.data["logs"]
+        # Ensure we are saving to the correct month file
+        if date.year != self.current_year or date.month != self.current_month:
+            self.load_month(date.year, date.month)
 
+        logs = self.current_month_data["logs"]
         updated = False
         for l in logs:
             if l.get("Date") == date_str:
                 l.update(habit_completions)
                 updated = True
                 break
-
         if not updated:
             new_log = {"Date": date_str}
             new_log.update(habit_completions)
             logs.append(new_log)
 
-        self.data["logs"] = logs
-        self._save_data()
+        self.current_month_data["logs"] = logs
+        self._save_current_month()
 
-    def get_metrics(self, start_date, end_date):
-        df = pd.DataFrame(self.data["metrics"])
+    def get_metrics(self, start_date=None, end_date=None):
+        df = pd.DataFrame(self.current_month_data["metrics"])
         if df.empty:
             return df
         df["Date"] = pd.to_datetime(df["Date"])
-        mask = (df["Date"] >= pd.to_datetime(start_date)) & (
-            df["Date"] <= pd.to_datetime(end_date)
-        )
-        return df.loc[mask]
+        if start_date and end_date:
+            mask = (df["Date"] >= pd.to_datetime(start_date)) & (
+                df["Date"] <= pd.to_datetime(end_date)
+            )
+            return df.loc[mask]
+        return df
 
     def save_metrics(self, date, screen_time, mood, energy, achievements):
         date_str = date.strftime("%Y-%m-%d")
-        metrics = self.data["metrics"]
+        if date.year != self.current_year or date.month != self.current_month:
+            self.load_month(date.year, date.month)
 
+        metrics = self.current_month_data["metrics"]
         values = {
             "Date": date_str,
             "Screen Time (min)": screen_time,
@@ -211,12 +271,11 @@ class GithubHandler:
                 m.update(values)
                 updated = True
                 break
-
         if not updated:
             metrics.append(values)
 
-        self.data["metrics"] = metrics
-        self._save_data()
+        self.current_month_data["metrics"] = metrics
+        self._save_current_month()
 
     @staticmethod
     def create_or_find_gist(token):
@@ -224,33 +283,29 @@ class GithubHandler:
             "Authorization": f"token {token}",
             "Accept": "application/vnd.github.v3+json",
         }
-        filename = "habit_tracker_data.json"
-
-        # 1. Search existing gists
+        # Check for new version file first
         try:
             response = requests.get("https://api.github.com/gists", headers=headers)
             if response.status_code == 200:
                 gists = response.json()
                 for gist in gists:
-                    if filename in gist["files"]:
+                    if (
+                        "habits.json" in gist["files"]
+                        or "habit_tracker_data.json" in gist["files"]
+                    ):
                         return gist["id"]
 
-            # 2. Create new gist if not found
+            # Create new if none found
             payload = {
                 "description": "Habit Tracker Data",
                 "public": False,
-                "files": {
-                    filename: {
-                        "content": json.dumps({"habits": [], "logs": [], "metrics": []})
-                    }
-                },
+                "files": {"habits.json": {"content": "[]"}},
             }
             response = requests.post(
                 "https://api.github.com/gists", headers=headers, json=payload
             )
             if response.status_code == 201:
                 return response.json()["id"]
-        except Exception as e:
-            print(f"Error in GitHub API: {e}")
-
+        except:
+            pass
         return None
