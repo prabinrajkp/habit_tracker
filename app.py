@@ -5,6 +5,7 @@ import pandas as pd
 import json
 import os
 import random
+import uuid
 from github_handler import GithubHandler
 from analytics import (
     calculate_completion_stats,
@@ -200,12 +201,7 @@ def main():
 
         if st.button("Add Habit"):
             if new_habit_name:
-                next_id = 1
-                if habits_df is not None and not habits_df.empty:
-                    try:
-                        next_id = int(habits_df["ID"].max()) + 1
-                    except:
-                        next_id = 1
+                next_id = str(uuid.uuid4())
                 handler.update_habit(next_id, new_habit_name, new_habit_goal)
                 st.success(f"Added '{new_habit_name}'!")
                 st.rerun()
@@ -325,7 +321,7 @@ def main():
                 st.write("Habit List")
                 habit_completions = {}
                 for _, row in habits_df.iterrows():
-                    h_id = f"H{int(row['ID'])}"
+                    h_id = f"H{row['ID']}"
                     current_val = "Pending"
                     if not day_log.empty and h_id in day_log.columns:
                         try:

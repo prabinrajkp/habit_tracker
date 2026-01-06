@@ -63,9 +63,7 @@ def calculate_completion_stats(logs_df, habits_df):
         # Top habits (only counting 'Yes')
         habit_totals = is_yes.sum().reset_index()
         habit_totals.columns = ["H_ID", "Total Completed"]
-        habit_totals["ID"] = (
-            habit_totals["H_ID"].str.replace("H", "", regex=False).astype(int)
-        )
+        habit_totals["ID"] = habit_totals["H_ID"].str.replace("H", "", regex=False)
 
         top_habits = pd.merge(habit_totals, habits_df, on="ID")
         top_habits = top_habits.sort_values(by="Total Completed", ascending=False)
@@ -233,7 +231,7 @@ def create_habit_performance_chart(habits_df, logs_df):
         no_counts.columns = ["H_ID", "No"]
 
         counts = pd.merge(yes_counts, no_counts, on="H_ID")
-        counts["ID"] = counts["H_ID"].str.replace("H", "", regex=False).astype(int)
+        counts["ID"] = counts["H_ID"].str.replace("H", "", regex=False)
 
         df = pd.merge(counts, habits_df, on="ID")
 
