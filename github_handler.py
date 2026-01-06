@@ -150,6 +150,10 @@ class GithubHandler:
 
         self._save_data()
 
+    def reset_data(self):
+        self.data = {"habits": [], "logs": [], "metrics": []}
+        return self._save_data()
+
     def get_logs(self, start_date, end_date):
         df = pd.DataFrame(self.data["logs"])
         if df.empty:

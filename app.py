@@ -4,6 +4,7 @@ import calendar
 import pandas as pd
 import json
 import os
+import random
 from github_handler import GithubHandler
 from analytics import (
     calculate_completion_stats,
@@ -222,6 +223,45 @@ def main():
                 handler.delete_habit(h_id)
                 st.warning(f"Deleted habit: {habit_to_delete}")
                 st.rerun()
+
+        # DANGER ZONE
+        st.divider()
+        with st.expander("⚠️ Danger Zone - Delete All Data", expanded=False):
+            st.error(
+                "This action will permanently delete ALL habits, logs, and metrics."
+            )
+
+            # Generate random numbers for verification if not already present
+            if "reset_n1" not in st.session_state:
+                st.session_state.reset_n1 = random.randint(1, 50)
+            if "reset_n2" not in st.session_state:
+                st.session_state.reset_n2 = random.randint(1, 50)
+
+            n1 = st.session_state.reset_n1
+            n2 = st.session_state.reset_n2
+
+            st.write(f"To confirm, please solve: **{n1} + {n2} = ?**")
+            user_answer = st.text_input(
+                "Enter the result here:", key="reset_verification"
+            )
+
+            if st.button("🔥 ERASE EVERYTHING", type="primary"):
+                try:
+                    if int(user_answer) == (n1 + n2):
+                        if handler.reset_data():
+                            st.success("All data has been erased successfully.")
+                            # Clear reset state to generate new numbers if they ever come back
+                            del st.session_state.reset_n1
+                            del st.session_state.reset_n2
+                            st.rerun()
+                        else:
+                            st.error(
+                                "Failed to sync reset to GitHub. Please try again."
+                            )
+                    else:
+                        st.error("Incorrect verification answer. Data NOT deleted.")
+                except ValueError:
+                    st.error("Please enter a valid number.")
 
     with tab1:
         st.subheader(f"Tracking for {month_name} {year}")
