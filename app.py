@@ -6,6 +6,7 @@ import json
 import os
 import random
 import uuid
+from fpdf import FPDF
 from github_handler import GithubHandler
 from analytics import (
     calculate_completion_stats,
@@ -182,8 +183,14 @@ def main():
             st.rerun()
         st.stop()
 
-    tab1, tab2, tab4, tab3 = st.tabs(
-        ["📅 Daily Tracker", "📊 Dashboard", "📈 Overall Analysis", "⚙️ Habit Settings"]
+    tab1, tab2, tab4, tab5, tab3 = st.tabs(
+        [
+            "📅 Daily Tracker",
+            "📊 Dashboard",
+            "📈 Overall Analysis",
+            "🖋️ Daily Journal",
+            "⚙️ Habit Settings",
+        ]
     )
 
     with tab3:
@@ -469,6 +476,85 @@ def main():
                 )
 
             st.table(pd.DataFrame(summary_data))
+
+    with tab5:
+        st.subheader(f"🖋️ Daily Journal - {month_name} {year}")
+
+        # Date selector for journal
+        j_date = st.date_input(
+            "Journal Date",
+            datetime.date.today(),
+            min_value=start_date,
+            max_value=end_date,
+            key="journal_date_selector",
+        )
+
+        # Load journal for the selected month
+        journal_data = handler.load_journal(year, month)
+        date_str = j_date.strftime("%Y-%m-%d")
+        current_entry = journal_data.get(date_str, "")
+
+        journal_content = st.text_area(
+            "Write your thoughts here...",
+            value=current_entry,
+            height=300,
+            key=f"journal_input_{date_str}",
+        )
+
+        if st.button("Save Journal Entry", type="primary"):
+            with st.spinner("Saving journal..."):
+                handler.save_journal(j_date, journal_content)
+            st.success("Journal entry saved!")
+            st.rerun()
+
+        st.divider()
+        st.subheader("📥 Export Journal")
+
+        if st.button("Generate Monthly PDF"):
+            if not journal_data:
+                st.warning("No journal entries found for this month.")
+            else:
+                try:
+                    pdf = FPDF()
+                    pdf.set_auto_page_break(auto=True, margin=15)
+                    pdf.add_page()
+                    pdf.set_font("Arial", "B", 16)
+                    pdf.cell(
+                        0,
+                        10,
+                        f"Habit Tracker Journal - {month_name} {year}",
+                        ln=True,
+                        align="C",
+                    )
+                    pdf.ln(10)
+
+                    # Sort entries by date
+                    for d_str in sorted(journal_data.keys()):
+                        content = journal_data[d_str]
+                        if content.strip():
+                            pdf.set_font("Arial", "B", 12)
+                            pdf.cell(0, 10, f"Date: {d_str}", ln=True)
+                            pdf.set_font("Arial", "", 11)
+                            pdf.multi_cell(0, 8, content)
+                            pdf.ln(5)
+
+                    pdf_output = pdf.output()
+                    st.download_button(
+                        label="Download PDF",
+                        data=bytes(pdf_output),
+                        file_name=f"Journal_{year}_{month:02d}.pdf",
+                        mime="application/pdf",
+                    )
+                except Exception as e:
+                    st.error(f"Error generating PDF: {e}")
+
+        # Quick view of past entries this month
+        if journal_data:
+            with st.expander("📖 View Past Entries (This Month)"):
+                for d_str in sorted(journal_data.keys(), reverse=True):
+                    if journal_data[d_str].strip():
+                        st.markdown(f"**{d_str}**")
+                        st.info(journal_data[d_str])
 
 
 if __name__ == "__main__":

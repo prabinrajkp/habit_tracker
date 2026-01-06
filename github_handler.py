@@ -29,6 +29,7 @@ class GithubHandler:
 
         self.habits = []
         self.current_month_data = {"logs": [], "metrics": []}
+        self.current_journal_data = {}
         self.current_year = None
         self.current_month = None
 
@@ -128,6 +129,16 @@ class GithubHandler:
         else:
             self.current_month_data = {"logs": [], "metrics": []}
         return self.current_month_data
+
+    def load_journal(self, year, month):
+        """Loads journal entries for a specific month."""
+        filename = f"journal_{year}_{month:02d}.json"
+        files = self._fetch_all_gist_files()
+        if filename in files:
+            self.current_journal_data = json.loads(files[filename])
+        else:
+            self.current_journal_data = {}
+        return self.current_journal_data
 
     def get_all_available_months(self):
         """Scans gist files for all data_YYYY_MM.json files and returns a list of (year, month)."""
@@ -292,6 +303,23 @@ class GithubHandler:
 
         self.current_month_data["metrics"] = metrics
         self._save_current_month()
+
+    def save_journal(self, date, content):
+        date_str = date.strftime("%Y-%m-%d")
+        year, month = date.year, date.month
+        filename = f"journal_{year}_{month:02d}.json"
+
+        # Check if we need to load a different month's journal
+        current_journal_filename = (
+            f"journal_{self.current_year}_{self.current_month:02d}.json"
+            if self.current_year
+            else None
+        )
+        if filename != current_journal_filename:
+            self.load_journal(year, month)
+
+        self.current_journal_data[date_str] = content
+        self._upload_to_gist(filename, self.current_journal_data)
 
     @staticmethod
     def create_or_find_gist(token):
