@@ -183,8 +183,9 @@ def main():
             st.rerun()
         st.stop()
 
-    tab1, tab2, tab4, tab5, tab3 = st.tabs(
+    tab_guide, tab1, tab2, tab4, tab5, tab3 = st.tabs(
         [
+            "🏠 Guide",
             "📅 Daily Tracker",
             "📊 Dashboard",
             "📈 Overall Analysis",
@@ -192,6 +193,64 @@ def main():
             "⚙️ Habit Settings",
         ]
     )
+
+    with tab_guide:
+        st.markdown(
+            """
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 20px; color: white; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.2);'>
+                <h2 style='margin: 0; font-size: 2.5rem;'>Welcome to Your Ultimate Habit Tracker 🚀</h2>
+                <p style='font-size: 1.2rem; opacity: 0.9;'>Master your routines, track your progress, and unlock your full potential.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown(
+                """
+                ### 🌟 Why This App?
+                Most habit trackers store your data on their servers. **We don't.** 
+                Your journey is yours alone. We use **GitHub Gists** to ensure:
+                - **Privacy First**: Only you own your data.
+                - **Cloud Sync**: Access from any device with your token.
+                - **Total Control**: Edit your data directly on GitHub anytime.
+                """
+            )
+
+            st.markdown(
+                """
+                ### 🛠️ Key Features
+                - **🎯 Smart Habits**: Track 12+ research-backed daily habits out of the box.
+                - **📊 Deep Analytics**: Beautiful charts to visualize your consistency and trends.
+                - **🖋️ Daily Journal**: Reflect on your day and export your monthly thoughts as a PDF.
+                - **📈 Overall Trends**: See how your mood and habits correlate over months.
+                """
+            )
+
+        with col2:
+            st.markdown(
+                """
+                ### 🚀 Quick Start Guide
+                1. **Set Your Goals**: Go to `⚙️ Habit Settings` to tailor your list.
+                2. **Track Daily**: Use `📅 Daily Tracker` to log your wins and metrics.
+                3. **Reflect**: Spend 2 minutes in `🖋️ Daily Journal` to clear your mind.
+                4. **Analyze**: Check `📊 Dashboard` weekly to see your progress.
+                """
+            )
+
+            st.info(
+                "💡 **Pro Tip**: Consistency beats intensity. Even if you miss a day, just start again tomorrow!"
+            )
+
+        st.divider()
+        st.subheader("🌈 Your Path to Success")
+        st.write(
+            "Building habits is the compound interest of self-improvement. "
+            "Whether it's drinking more water or mastering deep work, "
+            "every checkmark is a vote for the person you want to become."
+        )
 
     with tab3:
         st.subheader("Configure Your Habits")
