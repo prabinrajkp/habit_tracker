@@ -1,0 +1,29 @@
+Streamlit Habit Tracker with GitHub Gist Sync
+
+This project provides a digital habit tracker that synchronizes with a private GitHub Gist for a zero-hassle, free cloud storage experience.
+
+I. Prerequisites
+1. A GitHub Account.
+
+II. Installation
+1. Install dependencies:
+   pip install -r requirements.txt
+2. Run the application:
+   streamlit run app.py
+
+III. One-Time Setup (30 Seconds)
+1. Generate a GitHub Token:
+   - Go to [GitHub Token Settings](https://github.com/settings/tokens/new?description=HabitTracker&scopes=gist).
+   - Ensure the `gist` scope is selected.
+   - Click "Generate token" and copy it.
+2. Connect the App:
+   - Run `streamlit run app.py`.
+   - Paste your token into the sidebar and click "Connect & Initialize".
+   - That's it! The app will automatically create and manage a private Gist for your data.
+
+IV. Features
+- No manual sheet or tab creation.
+- Zero-cost cloud syncing via GitHub Gists.
+- Fast data loading (single JSON request).
+- Private and secure storage.
+- Visual Dashboard with Plotly charts.

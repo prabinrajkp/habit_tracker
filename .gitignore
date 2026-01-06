@@ -1,0 +1,20 @@
+# Virtual Environment
+venv/
+env/
+.env/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Streamlit config (optional, but good to ignore if it contains secrets)
+# .streamlit/
+
+# Local data (since we use GitHub Gist for cloud sync)
+local_data/
+config.json
+
+# IDEs
+.vscode/
+.idea/
