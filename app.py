@@ -43,56 +43,46 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-CONFIG_FILE = "config.json"
-
-
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            try:
-                return json.load(f)
-            except:
-                return {"git_token": "", "gist_id": "", "local_mode": False}
-    return {"git_token": "", "gist_id": "", "local_mode": False}
-
-
-def save_config(config):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f)
+# Initialize session state
+if "git_token" not in st.session_state:
+    st.session_state.git_token = ""
+if "gist_id" not in st.session_state:
+    st.session_state.gist_id = ""
+if "local_mode" not in st.session_state:
+    st.session_state.local_mode = False
 
 
 def main():
     st.title("🚀 Ultimate Habit Tracker")
 
-    config = load_config()
+    # Removed local config file loading for session-based security
 
     with st.sidebar:
         st.subheader("⚙️ Configuration")
 
-        local_mode = st.toggle(
+        st.session_state.local_mode = st.toggle(
             "Local Mode (Offline)",
-            value=config.get("local_mode", False),
+            value=st.session_state.local_mode,
             help="Use local CSV files instead of GitHub sync",
         )
 
         st.markdown("---")
         st.markdown("### ☁️ GitHub Sync")
-        git_token = st.text_input(
+        git_token_input = st.text_input(
             "GitHub Token (PAT)",
-            value=config.get("git_token", ""),
+            value=st.session_state.git_token,
             type="password",
             help="Your Personal Access Token with 'gist' scope",
         )
 
         if st.button("Connect & Initialize"):
-            if git_token:
+            if git_token_input:
                 with st.spinner("Connecting to GitHub..."):
-                    gist_id = GithubHandler.create_or_find_gist(git_token)
+                    gist_id = GithubHandler.create_or_find_gist(git_token_input)
                     if gist_id:
-                        config["git_token"] = git_token
-                        config["gist_id"] = gist_id
-                        config["local_mode"] = False
-                        save_config(config)
+                        st.session_state.git_token = git_token_input
+                        st.session_state.gist_id = gist_id
+                        st.session_state.local_mode = False
                         st.success("Successfully connected to GitHub!")
                         st.rerun()
                     else:
@@ -125,10 +115,12 @@ def main():
         month = list(calendar.month_name).index(month_name)
 
     # Initialize handler
-    if local_mode:
+    if st.session_state.local_mode:
         handler = GithubHandler(local=True)
-    elif config.get("git_token") and config.get("gist_id"):
-        handler = GithubHandler(token=config["git_token"], gist_id=config["gist_id"])
+    elif st.session_state.git_token and st.session_state.gist_id:
+        handler = GithubHandler(
+            token=st.session_state.git_token, gist_id=st.session_state.gist_id
+        )
     else:
         st.markdown(
             """
